@@ -10,7 +10,7 @@ import anndata
 import geopandas as gpd
 import scanpy as sc
 
-from tifffile import imread, imwrite
+from tifffile import imread
 from csbdeep.utils import normalize
 from stardist.models import StarDist2D
 from shapely.geometry import Polygon, Point
@@ -158,7 +158,7 @@ def plot_nuclei_area(gdf,area_cut_off,path):
     axs[0].set_title('Nuclei Area')
 
     axs[1].hist(gdf[gdf['area'] < area_cut_off]['area'], bins=50, edgecolor='black')
-    axs[1].set_title('Nuclei Area Filtered:'+str(area_cut_off))
+    axs[1].set_title('Nuclei Area Filtered: Area greater than ' + str(area_cut_off))
 
     plt.tight_layout()
     plt.savefig(os.path.join(path, "bin_nuclei_area_distribution.png"))
@@ -170,11 +170,11 @@ def total_umi(adata_, cut_off, path):
 
     # Box plot
     axs[0].boxplot(adata_.obs["total_counts"], vert=False, widths=0.7, patch_artist=True, boxprops=dict(facecolor='skyblue'))
-    axs[0].set_title('Total Counts')
+    axs[0].set_title('Total Counts Per Cell')
 
     # Box plot after filtering
     axs[1].boxplot(adata_.obs["total_counts"][adata_.obs["total_counts"] > cut_off], vert=False, widths=0.7, patch_artist=True, boxprops=dict(facecolor='skyblue'))
-    axs[1].set_title('Total Counts > ' + str(cut_off))
+    axs[1].set_title('Total Counts Per Cell > ' + str(cut_off))
 
     # Remove y-axis ticks and labels
     for ax in axs:
@@ -187,13 +187,16 @@ def total_umi(adata_, cut_off, path):
 ######### MAIN Functions
 def qc(space_ranger, output) -> None:
     # Load the SpaceRanger data
-    adata = sc.read(space_ranger)
+    file_path = os.path.join(space_ranger, "filtered_feature_bc_matrix")
+    adata = sc.read_10x_mtx(file_path, var_names='gene_ids')
 
     # Perform initial QC
     sc.pp.calculate_qc_metrics(adata, inplace=True)
 
     # Visualize the QC metrics
-    sc.pl.violin(adata, ['n_genes', 'n_counts'], jitter=0.4)
+    # n_genes_by_counts = Num of genes per spot; total counts = total UMI per spot
+    sc.pl.violin(adata, ['n_genes_by_counts', 'total_counts'], 
+                jitter=0.4)#, xlabel=["Number of genes per 2um bin", "Total UMI per 2um bin"])
     plt.savefig(os.path.join(output, "bin_qc_metrics.png"))
 
     # # Save the processed AnnData object
@@ -231,13 +234,16 @@ def segment(img: np.ndarray, dir_base: str, model_name: StarDist2D = "2D_versati
     cmap=ListedColormap(['grey'])
     plot_mask_and_save_image(title="Segmentation",gdf=gdf,bbox=None,
                              cmap=cmap,img=img,
-                             output_name=dir_base+"segmentation.tif")
+                             output_name=os.path.join(dir_base,"segmentation.png"))
     return gdf
 
 def binning(base_path: str, gdf: gpd.GeoDataFrame, output: str) -> None:
     raw_h5_file = os.path.join(base_path, 'raw_feature_bc_matrix.h5')
     tissue_position_file = os.path.join(base_path, "spatial", 'tissue_positions.parquet')
     adata = sc.read_10x_h5(raw_h5_file)
+    # make sure the var_names are gene ids not symbols
+    adata.var['gene_symbols'] = adata.var_names
+    adata.var_names = adata.var['gene_ids']
 
     # Load the Spatial Coordinates
     df_tissue_positions=pd.read_parquet(tissue_position_file)
@@ -310,7 +316,7 @@ def binning(base_path: str, gdf: gpd.GeoDataFrame, output: str) -> None:
 
     # Plot the nuclei area distribution before and after filtering
     plot_nuclei_area(gdf=gdf,area_cut_off=500, path=output)
-    total_umi(grouped_filtered_adata, 100, path=output)
+    total_umi(grouped_filtered_adata, 500, path=output)
     # save grouped filtered adata
     grouped_filtered_adata.write(os.path.join(output, "grouped_filtered_adata.h5ad"))
     return grouped_filtered_adata
@@ -360,7 +366,7 @@ def main():
     output_dir = os.path.join(args.output, args.exp_name)
     os.makedirs(output_dir, exist_ok=True)
     # run qc
-    qc(args.space_ranger, args.output)
+    qc(args.space_ranger, output_dir)
     # run segmentation
     img = imread(args.tissue_img)
     gdf = segment(img, output_dir, model_name="2D_versatile_he", normalize_img=True)
