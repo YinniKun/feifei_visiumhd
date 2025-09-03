@@ -313,7 +313,42 @@ def binning(base_path: str, gdf: gpd.GeoDataFrame, output: str) -> None:
     total_umi(grouped_filtered_adata, 100, path=output)
     # save grouped filtered adata
     grouped_filtered_adata.write(os.path.join(output, "grouped_filtered_adata.h5ad"))
-    # return grouped_filtered_adata
+    return grouped_filtered_adata
+
+def plot_cluster(gdf, grouped_filtered_adata, img, dir_base):
+    # Create a mask based on the 'id' column for values present in 'gdf' with 'area' less than 500
+    mask_area = grouped_filtered_adata.obs['id'].isin(gdf[gdf['area'] < 500].id)
+
+    # Create a mask based on the 'total_counts' column for values greater than 100
+    mask_count = grouped_filtered_adata.obs['total_counts'] > 100
+
+    # Apply both masks to the original AnnData to create a new filtered AnnData object
+    count_area_filtered_adata = grouped_filtered_adata[mask_area & mask_count, :]
+
+    # Calculate quality control metrics for the filtered AnnData object
+    sc.pp.calculate_qc_metrics(count_area_filtered_adata, inplace=True)
+
+    # Normalize total counts for each cell in the AnnData object
+    sc.pp.normalize_total(count_area_filtered_adata, inplace=True)
+
+    # Logarithmize the values in the AnnData object after normalization
+    sc.pp.log1p(count_area_filtered_adata)
+
+    # Identify highly variable genes in the dataset using the Seurat method
+    sc.pp.highly_variable_genes(count_area_filtered_adata, flavor="seurat", n_top_genes=2000)
+
+    # Perform Principal Component Analysis (PCA) on the AnnData object
+    sc.pp.pca(count_area_filtered_adata)
+
+    # Build a neighborhood graph based on PCA components
+    sc.pp.neighbors(count_area_filtered_adata)
+
+    # Perform Leiden clustering on the neighborhood graph and store the results in 'clusters' column
+
+    # Adjust the resolution parameter as needed for different samples
+    sc.tl.leiden(count_area_filtered_adata, resolution=0.35, key_added="clusters")
+    plot_clusters_and_save_image(title="clusters", gdf=gdf, img=img, adata=count_area_filtered_adata, 
+                                 color_by_obs='clusters', output_name=os.path.join(dir_base,"image_clustering.png"))
 
 def main():
     parser = argparse.ArgumentParser(description="Perform QC on VisiumHD samples")
@@ -329,8 +364,9 @@ def main():
     # run segmentation
     img = imread(args.tissue_img)
     gdf = segment(img, output_dir, model_name="2D_versatile_he", normalize_img=True)
-    # binning
-    binning(args.space_ranger, gdf, output_dir)
+    # binning and plotting
+    grouped_anndata = binning(args.space_ranger, gdf, output_dir)
+    plot_cluster(gdf, grouped_anndata, img, output_dir)
 
     print("Preliminary analysis complete.")
 
