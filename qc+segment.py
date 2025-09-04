@@ -137,6 +137,9 @@ def plot_clusters_and_save_image(title, gdf, img, adata, bbox=None, color_by_obs
 
     # Plot the filtered polygons on the second axis
     plot = filtered_gdf.plot(column=color_by_obs, cmap=custom_cmap, ax=axes[1], legend=True)
+    if bbox is None:
+        axes[1].set_xlim(0, img.shape[1])
+        axes[1].set_ylim(img.shape[0], 0)
     axes[1].set_title(color_by_obs)
     legend = axes[1].get_legend()
     legend.set_bbox_to_anchor((1.05, 1))
@@ -158,7 +161,7 @@ def plot_nuclei_area(gdf,area_cut_off,path):
     axs[0].set_title('Nuclei Area')
 
     axs[1].hist(gdf[gdf['area'] < area_cut_off]['area'], bins=50, edgecolor='black')
-    axs[1].set_title('Nuclei Area Filtered: Area greater than ' + str(area_cut_off))
+    axs[1].set_title('Nuclei Area Filtered: Area less than ' + str(area_cut_off))
 
     plt.tight_layout()
     plt.savefig(os.path.join(path, "bin_nuclei_area_distribution.png"))
@@ -323,13 +326,14 @@ def binning(base_path: str, gdf: gpd.GeoDataFrame, output: str) -> None:
 
 def plot_cluster(gdf, grouped_filtered_adata, img, dir_base):
     # Create a mask based on the 'id' column for values present in 'gdf' with 'area' less than 500
-    mask_area = grouped_filtered_adata.obs['id'].isin(gdf[gdf['area'] < 500].id)
+    # mask_area = grouped_filtered_adata.obs['id'].isin(gdf[gdf['area'] < 500].id)
 
     # Create a mask based on the 'total_counts' column for values greater than 100
-    mask_count = grouped_filtered_adata.obs['total_counts'] > 100
+    # mask_count = grouped_filtered_adata.obs['total_counts'] > 100
 
     # Apply both masks to the original AnnData to create a new filtered AnnData object
-    count_area_filtered_adata = grouped_filtered_adata[mask_area & mask_count, :]
+    count_area_filtered_adata = grouped_filtered_adata  # No filtering applied
+    # count_area_filtered_adata = grouped_filtered_adata[mask_area & mask_count, :]
 
     # Calculate quality control metrics for the filtered AnnData object
     sc.pp.calculate_qc_metrics(count_area_filtered_adata, inplace=True)
