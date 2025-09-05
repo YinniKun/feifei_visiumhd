@@ -139,7 +139,7 @@ def plot_clusters_and_save_image(title, gdf, img, adata, bbox=None, color_by_obs
     plot = filtered_gdf.plot(column=color_by_obs, cmap=custom_cmap, ax=axes[1], legend=True)
     if bbox is None:
         axes[1].set_xlim(0, img.shape[1])
-        axes[1].set_ylim(img.shape[0], 0)
+        axes[1].set_ylim(0,img.shape[0])
     axes[1].set_title(color_by_obs)
     legend = axes[1].get_legend()
     legend.set_bbox_to_anchor((1.05, 1))
