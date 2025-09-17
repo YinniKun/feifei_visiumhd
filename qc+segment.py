@@ -152,6 +152,7 @@ def plot_clusters_and_save_image(title, gdf, img, adata, bbox=None, color_by_obs
         plt.savefig(output_name, bbox_inches='tight')
     else:
         plt.show()
+    plt.close()
 
 # Plotting function for nuclei area distribution
 def plot_nuclei_area(gdf,area_cut_off,path):
@@ -322,6 +323,8 @@ def binning(base_path: str, gdf: gpd.GeoDataFrame, output: str) -> None:
     total_umi(grouped_filtered_adata, 500, path=output)
     # save grouped filtered adata
     grouped_filtered_adata.write(os.path.join(output, "grouped_filtered_adata.h5ad"))
+    # save the gdf
+    gdf.to_file(os.path.join(output, "binned_cells.geojson"), driver='GeoJSON')
     return grouped_filtered_adata
 
 def plot_cluster(gdf, grouped_filtered_adata, img, dir_base):
